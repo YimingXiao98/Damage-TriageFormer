@@ -1,0 +1,13 @@
+torch
+torchvision
+torchaudio
+transformers
+timm
+einops
+opencv-python
+pillow
+shapely
+geopandas
+torchmetrics
+tqdm
+matplotlib

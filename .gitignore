@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.venv/
+/data/
+/runs/
+/logs/
+*.pth
+*.log
+.DS_Store
