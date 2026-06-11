@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software or the DamageTriage-Bench benchmark, please cite the following."
+title: "Damage-TriageFormer"
+abstract: "A foundation-model framework for decision-relevant building damage typology from single post-event imagery."
+authors:
+  - family-names: Xiao
+    given-names: Yiming
+  - family-names: Ho
+    given-names: Yu-Hsuan
+  - family-names: Thasma
+    given-names: Sanjay
+  - family-names: Ma
+    given-names: Junwei
+  - family-names: Mostafavi
+    given-names: Ali
+repository-code: "https://github.com/YimingXiao98/Damage-TriageFormer"
+license: MIT
