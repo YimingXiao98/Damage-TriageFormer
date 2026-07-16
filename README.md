@@ -122,12 +122,14 @@ layers.
 
 ## Citation
 
-<!-- TODO: update once the paper has a venue / DOI. -->
 ```bibtex
-@misc{damagetriageformer,
-  title  = {Damage-TriageFormer: A Foundation-Model Framework for Decision-Relevant
-            Building Damage Typology from Post-Event Imagery},
-  author = {Xiao, Yiming and Ho, Yu-Hsuan and Ma, Junwei and Mostafavi, Ali},
-  year   = {2026}
+@misc{xiao2026damagetriageformerfoundationmodelframeworktypologybased,
+      title={Damage-TriageFormer: A Foundation-Model Framework for Typology-Based Building Damage Assessment from Mono-Temporal Imagery}, 
+      author={Yiming Xiao and Yu-Hsuan Ho and Sanjay Thasma and Junwei Ma and Ali Mostafavi},
+      year={2026},
+      eprint={2606.12248},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2606.12248}, 
 }
 ```
