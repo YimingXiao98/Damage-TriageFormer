@@ -1,11 +1,11 @@
 # Damage-TriageFormer
 
 > **Revision note.** The original entry point (`main.py`) implements the tile-mode
-> model. The revised manuscript's per-building crop mode is provided separately
-> in `scripts/train_crop.py`. The original public checkpoint was trained
-> on a superseded tile-level split; do not present its 0.619 test macro F1 as the
-> revised paper result. The corrected photo-atomic tile-mode result is 0.579, and
-> the revised crop-mode result is 0.616.
+> model. The revised manuscript's crop mode for individual buildings is provided
+> in `scripts/train_crop.py`. The current public checkpoint is the crop-mode model
+> trained on the corrected photo-atomic split, with validation/test macro F1 of
+> 0.646/0.616. The originally released tile-mode checkpoint and its superseded
+> tile-level split are retained only in repository history.
 
 A foundation-model framework for decision-relevant building damage typology from
 single post-event imagery. Given a post-event RGB tile and building instance
@@ -121,6 +121,13 @@ python scripts/train_crop.py \
     --name crop_dtf
 ```
 
+The corresponding primary checkpoint is available from Hugging Face:
+
+```bash
+hf download Ymx1025/DamageTriageFormer-model best.pth \
+    --local-dir "$DINOV3_RUNS_ROOT/crop_dtf"
+```
+
 The same script produces the crop baselines with `--arch resnet50`,
 `--arch vit_b_16`, or `--arch dinov3_vitl16` without `--gated`.
 
@@ -130,9 +137,9 @@ The same script produces the crop baselines with `--arch resnet50`,
   (validation) / **0.579** (test).
 - Revised photo-atomic split, crop-mode primary configuration: macro F1 **0.646**
   (validation) / **0.616** (test).
-- Superseded tile-level split, archived tile checkpoint: macro F1 **0.624**
-  (validation) / **0.619** (test). This is retained only for historical
-  reproducibility and is not the revised manuscript protocol.
+- Originally submitted tile model on the superseded tile-level split: macro F1
+  **0.624** (validation) / **0.619** (test). These historical values are not the
+  revised manuscript protocol.
 
 All configurations are single-seed. The photo-atomic split keeps tiles derived
 from one source photo in one fold; it does not reconstruct buildings clipped at
