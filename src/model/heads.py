@@ -79,7 +79,7 @@ class SpatialAttentionPooling(nn.Module):
         attn = torch.sigmoid(attn).squeeze(0)               # (1, H, W)
 
         # Vectorized weighted-average pool over all N instances in one go
-        # (was a Python for-loop — one CUDA kernel per building, ~5-10x slower).
+        # (was a Python for-loop—one CUDA kernel for each building, ~5–10× slower).
         combined = mask * attn                              # (N, H, W)
         weight_sum = combined.sum(dim=(1, 2)) + 1e-6        # (N,)
         # features: (1, C, H, W); combined: (N, 1, H, W)   -> broadcast (N, C, H, W)

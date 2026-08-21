@@ -8,9 +8,10 @@
 > tile-level split are retained only in repository history.
 
 A foundation-model framework for decision-relevant building damage typology from
-single post-event imagery. Given a post-event RGB tile and building instance
-masks (footprints), the model assigns each building one of five damage-typology
-classes:
+single post-event imagery. The primary crop-mode model classifies a 224×224 crop
+of an individual building; the tile-mode model processes a post-event RGB tile
+and footprint instance masks. Both assign each building one of five
+damage-typology classes:
 
 | Class | Name |
 |------:|------|
@@ -64,7 +65,7 @@ export DINOV3_RUNS_ROOT=/path/to/your/runs   # checkpoints/logs (default ./runs)
 
 ## Training
 
-**Two-GPU DDP (the reported recipe: 30 epochs, effective batch 32):**
+**Tile-mode configuration (two-GPU DDP, 30 epochs, effective batch 32):**
 
 ```bash
 sbatch scripts/train_2gpu.sbatch     # Slurm; edit directives for your cluster
@@ -95,13 +96,13 @@ python main.py --name damage_triageformer_v11 --epochs 30 --batch-size 2 \
     --stratified-splits $DINOV3_DATA_ROOT/tiles_1024/photo_splits.json
 ```
 
-The best checkpoint (by validation macro-F1 in the footprint-conditioned setting)
-is written to `$DINOV3_RUNS_ROOT/<name>/best_model.pth`.
+The best tile-mode checkpoint (by validation macro F1) is written to
+`$DINOV3_RUNS_ROOT/<name>/best_model.pth`.
 
 ### Primary crop-mode configuration
 
-Build the connected-component instance index once, extract the per-building
-crops, and train the gated DINOv3 configuration:
+Build the connected-component instance index once, extract crops of individual
+buildings, and train the gated DINOv3 configuration:
 
 ```bash
 python scripts/build_instance_index.py \
@@ -133,10 +134,10 @@ The same script produces the crop baselines with `--arch resnet50`,
 
 ## Results and protocol scope
 
-- Revised photo-atomic split, tile-mode full recipe: macro F1 **0.575**
-  (validation) / **0.579** (test).
 - Revised photo-atomic split, crop-mode primary configuration: macro F1 **0.646**
   (validation) / **0.616** (test).
+- Revised photo-atomic split, tile-mode full recipe: macro F1 **0.575**
+  (validation) / **0.579** (test).
 - Originally submitted tile model on the superseded tile-level split: macro F1
   **0.624** (validation) / **0.619** (test). These historical values are not the
   revised manuscript protocol.

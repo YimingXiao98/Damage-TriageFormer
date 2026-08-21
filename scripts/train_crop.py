@@ -1,6 +1,6 @@
-"""Train the per-building crop classifiers used in the revised paper.
+"""Train the building-crop classifiers used in the revised paper.
 
-Standard CNN/ViT classifiers on per-building crops, the conventional
+Standard CNN/ViT classifiers on crops of individual buildings, the conventional
 formulation prior work uses: each building instance is cropped from the tile
 (bbox + margin), resized to 224, and classified into the 5 damage-typology
 classes. The gated DINOv3 option is the paper's primary crop configuration;

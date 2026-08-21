@@ -2,7 +2,7 @@
 
 Output: revision/instance_index/shard_N.json, each a list of
   {tile, split, cls, x0, y0, x1, y1, area}
-one entry per building instance (connected component of one class color).
+one entry for each building instance (connected component of one class color).
 
 Used by: annotation-sample generation (Track C), per-event analyses (Track B),
 ambiguity/error correlation (R3.4). Shardable + resumable like the audit.
