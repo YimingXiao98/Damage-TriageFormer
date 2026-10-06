@@ -2,9 +2,11 @@
 
 > **Revision note.** The original entry point (`main.py`) implements the tile-mode
 > model. The revised manuscript's crop mode for individual buildings is provided
-> in `scripts/train_crop.py`. The current public checkpoint is the crop-mode model
-> trained on the corrected photo-atomic split, with validation/test macro F1 of
-> 0.646/0.616. The originally released tile-mode checkpoint and its superseded
+> in `scripts/train_crop.py`; the multi-seed head, resolution, and recipe controls
+> of the revised paper (Table 6) are in `scripts/train_crop_r2.py`, and
+> `results/provenance*.csv` map every reported number to its run. The current
+> public checkpoint is the seed-42 crop-mode model trained on the corrected
+> photo-atomic split, with validation/test macro F1 of 0.646/0.616. The originally released tile-mode checkpoint and its superseded
 > tile-level split are retained only in repository history.
 
 A foundation-model framework for decision-relevant building damage typology from
@@ -132,17 +134,46 @@ hf download Ymx1025/DamageTriageFormer-model best.pth \
 The same script produces the crop baselines with `--arch resnet50`,
 `--arch vit_b_16`, or `--arch dinov3_vitl16` without `--gated`.
 
+### Multi-seed controls of the revised paper
+
+`scripts/train_crop_r2.py` trains every crop configuration in Table 6 of the
+revised paper. `--variant` selects the heads (`gated_aux` is the primary
+configuration; `gated`, `aux`, and `plain` are the head ablations), `--recipe`
+selects the crop recipe (`crop`) or the tile-mode recipe applied to crops
+(`tile`), `--crop-mode native` keeps crops at native pixel scale, and `--seed`
+sets the training seed (42, 43, 44 in the paper):
+
+```bash
+python scripts/train_crop_r2.py --prepare --crops /path/to/crops \
+    --index-dir instance_index                       # add --crop-mode native for native crops
+python scripts/train_crop_r2.py --crops /path/to/crops --index-dir instance_index \
+    --variant gated_aux --recipe crop --seed 43 --name r2_crop_dtf_s43
+```
+
+The tile-mode seeds use `main.py` with the command above plus `--seed <s>` and
+a per-run `--class-weights-file`, so that runs never share a cached class-weight
+file. Each run writes `best_model_oracle.pth`, the checkpoint selected on the
+footprint-conditioned validation macro F1 reported in the paper, next to
+`best_model.pth` (selected on the end-to-end metric).
+
+`results/provenance.csv` (configurations of the earlier manuscript version) and
+`results/provenance_r2.csv` (all runs of the revision) list, for every run, the
+configuration, seed, Slurm job, checkpoint-selection metric, evaluation
+population, and validation and test macro F1 recomputed from the stored
+per-fragment prediction files.
+
 ## Results and protocol scope
 
-- Revised photo-atomic split, crop-mode primary configuration: macro F1 **0.646**
-  (validation) / **0.616** (test).
-- Revised photo-atomic split, tile-mode full recipe: macro F1 **0.575**
-  (validation) / **0.579** (test).
+- Revised photo-atomic split, crop-mode primary configuration, three seeds:
+  macro F1 **0.662 ± 0.012** (validation) / **0.620 ± 0.011** (test); the
+  released seed-42 checkpoint reaches 0.646 / 0.616.
+- Revised photo-atomic split, tile-mode full recipe, three seeds: macro F1
+  **0.591 ± 0.006** (validation) / **0.564 ± 0.003** (test).
 - Originally submitted tile model on the superseded tile-level split: macro F1
   **0.624** (validation) / **0.619** (test). These historical values are not the
   revised manuscript protocol.
 
-All configurations are single-seed. The photo-atomic split keeps tiles derived
+Three-seed values are on the common evaluation population of the paper. The photo-atomic split keeps tiles derived
 from one source photo in one fold; it does not reconstruct buildings clipped at
 tile boundaries or rule out duplicate buildings across overlapping photos.
 
@@ -158,6 +189,9 @@ src/utils/              # class weights, visualization, seeding
 scripts/train_2gpu.sbatch
 scripts/build_instance_index.py
 scripts/train_crop.py
+scripts/train_crop_r2.py   # multi-seed head, resolution, and recipe controls
+results/provenance.csv     # run-level provenance of every reported number
+results/provenance_r2.csv
 photo_splits.json
 ```
 

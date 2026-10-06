@@ -101,7 +101,9 @@ def train_one_epoch(model: torch.nn.Module,
                     focal_gamma: float = 2.0,
                     label_smoothing: float = 0.1,
                     rank: int = 0,
-                    world_size: int = 1) -> float:
+                    world_size: int = 1,
+                    accumulation_steps: int = 1,
+                    ema_model=None) -> float:
     """
     Train for one epoch (standard 4-class mode).
 
@@ -127,6 +129,8 @@ def train_one_epoch(model: torch.nn.Module,
     num_batches = 0
     nan_batches = 0
     nan_abort_frac = 0.1  # abort epoch if >10% of batches NaN
+    accum_counter = 0
+    optimizer.zero_grad(set_to_none=True)
 
     pbar = tqdm(loader, desc=f"Train {epoch+1}/{num_epochs}", disable=rank != 0)
     for batch in pbar:
@@ -164,7 +168,6 @@ def train_one_epoch(model: torch.nn.Module,
         )
 
         # NaN loss: still run backward (required for DDP sync) but skip optimizer step
-        optimizer.zero_grad(set_to_none=True)
         if torch.isnan(loss):
             nan_batches += 1
             if rank == 0:
@@ -179,22 +182,28 @@ def train_one_epoch(model: torch.nn.Module,
             (loss * 0).backward()
             continue
 
-        loss.backward()
-        grad_norm = torch.nn.utils.clip_grad_norm_(
-            model.parameters(), max_norm=1.0)
-        # Only skip on NaN/Inf — clipping already bounds the update to
-        # max_norm=1.0, so any finite pre-clip norm produces a safe step.
-        if torch.isnan(grad_norm) or torch.isinf(grad_norm):
-            nan_batches += 1
-            if rank == 0:
-                print(
-                    f"[WARN] NaN/Inf gradient norm, skipping step")
-            continue
-        # Observational warning — no step skip, just flag unusual norms.
-        if rank == 0 and grad_norm > 1e5:
-            print(f"[INFO] Large pre-clip grad_norm={grad_norm:.1f} "
-                  f"(clipped to 1.0, step applied)")
-        optimizer.step()
+        (loss / accumulation_steps).backward()
+        accum_counter += 1
+
+        if accum_counter >= accumulation_steps:
+            grad_norm = torch.nn.utils.clip_grad_norm_(
+                model.parameters(), max_norm=1.0)
+            if torch.isnan(grad_norm) or torch.isinf(grad_norm):
+                nan_batches += 1
+                if rank == 0:
+                    print(f"[WARN] NaN/Inf gradient norm, skipping step")
+                optimizer.zero_grad(set_to_none=True)
+                accum_counter = 0
+                continue
+            if rank == 0 and grad_norm > 1e5:
+                print(f"[INFO] Large pre-clip grad_norm={grad_norm:.1f} "
+                      f"(clipped to 1.0, step applied)")
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            if ema_model is not None:
+                raw = model.module if hasattr(model, 'module') else model
+                ema_model.update_parameters(raw)
+            accum_counter = 0
 
         running_loss += loss.item()
         num_batches += 1
@@ -203,8 +212,16 @@ def train_one_epoch(model: torch.nn.Module,
             "loss": f"{loss.item():.4f}",
             "seg": f"{seg_loss.item():.4f}",
             "sev": f"{sev_loss.item():.4f}",
-            "grad": f"{grad_norm:.2f}"
         })
+
+    if accum_counter > 0:
+        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        if not (torch.isnan(grad_norm) or torch.isinf(grad_norm)):
+            optimizer.step()
+            if ema_model is not None:
+                raw = model.module if hasattr(model, 'module') else model
+                ema_model.update_parameters(raw)
+        optimizer.zero_grad(set_to_none=True)
 
     if num_batches == 0:
         return float('nan')

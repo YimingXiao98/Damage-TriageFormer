@@ -81,6 +81,9 @@ def parse_args():
                         help="Label smoothing factor")
     parser.add_argument("--use-class-weights", action="store_true", default=True,
                         help="Use class weights in loss function")
+    parser.add_argument("--class-weights-file", default="class_weights.json",
+                        help="class-weight cache; pass a per-run path so runs with different "
+                             "training splits never share weights")
     parser.add_argument("--no-class-weights", dest="use_class_weights",
                         action="store_false",
                         help="Disable class weights (uniform)")
@@ -181,6 +184,9 @@ def parse_args():
     # Hierarchical and Tiling
     parser.add_argument("--use-hierarchical", action="store_true", default=USE_HIERARCHICAL,
                         help="Use hierarchical damage classification (Type×Extent)")
+    parser.add_argument("--flat-head", action="store_true",
+                        help="Use the plain flat 5-class SeverityHead (disables "
+                             "hierarchical and gated heads; for ablations/baselines)")
     parser.add_argument("--use-gated-head", action="store_true",
                         help="Use Damaged/Undamaged gate + conditional 4-way head "
                              "(xView2 pattern). Overrides --use-hierarchical.")
@@ -202,16 +208,22 @@ def parse_args():
                         help="Gradient accumulation steps. Effective batch = "
                              "batch_size * world_size * accumulation_steps.")
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.flat_head:
+        args.use_hierarchical = False
+        args.use_gated_head = False
+    return args
 
 
-def load_or_compute_class_weights(train_loader, device):
+def load_or_compute_class_weights(train_loader, device, weights_file="class_weights.json"):
     """
     Load precomputed class weights or compute from data.
 
-    Uses inverse square root frequency for balanced weighting.
+    Uses inverse square root frequency for balanced weighting. Round 2: the
+    file is per run when --class-weights-file is given, because a shared
+    class_weights.json in the working directory was silently reused across
+    runs with different training splits (see the paper's Supplementary Section S1).
     """
-    weights_file = "class_weights.json"
 
     if os.path.exists(weights_file):
         print(f"Loading class weights from {weights_file}")
@@ -224,10 +236,11 @@ def load_or_compute_class_weights(train_loader, device):
         weights = calculate_class_weights(train_loader.dataset)
         weights = weights.to(device)
 
-        # Save for future use
-        with open(weights_file, 'w') as f:
-            json.dump(weights.cpu().tolist(), f)
-        print(f"Saved class weights to {weights_file}")
+        # Save for future use (rank 0 only, so DDP ranks do not race)
+        if os.environ.get("RANK", "0") == "0":
+            with open(weights_file, 'w') as f:
+                json.dump(weights.cpu().tolist(), f)
+            print(f"Saved class weights to {weights_file}")
 
     print(f"Class weights: {weights}")
     return weights
@@ -453,7 +466,7 @@ def main():
     # Class weights for focal loss
     t_w = time.perf_counter()
     if args.use_class_weights:
-        class_weights = load_or_compute_class_weights(train_loader, device)
+        class_weights = load_or_compute_class_weights(train_loader, device, args.class_weights_file)
     else:
         class_weights = None
         if rank == 0:
@@ -473,7 +486,7 @@ def main():
         # args.use_class_weights.
         weights_for_priors = class_weights
         if weights_for_priors is None:
-            weights_for_priors = load_or_compute_class_weights(train_loader, device)
+            weights_for_priors = load_or_compute_class_weights(train_loader, device, args.class_weights_file)
         w = weights_for_priors.to(device).float()
         class_counts = 1.0 / (w ** 2 + 1e-10)
         priors_5 = class_counts / class_counts.sum()
@@ -647,6 +660,8 @@ def main():
                 label_smoothing=args.label_smoothing,
                 rank=rank,
                 world_size=world_size,
+                accumulation_steps=args.accumulation_steps,
+                ema_model=ema_model,
             )
             train_stats = {'loss': train_loss_val}
 
@@ -817,6 +832,16 @@ def main():
                     run_dir, "best_model.pth"))
                 tag = "(EMA)" if ema_model is not None else ""
                 print(f"  ★ New best model! {tag} (e2e Macro F1: {best_f1:.4f})")
+            # Round 2: also keep the checkpoint selected on the
+            # footprint-conditioned (oracle-mask) metric that the paper reports.
+            oracle_f1 = val_metrics.get("Damage_Macro_F1_oracle")
+            if oracle_f1 is not None and oracle_f1 > getattr(args, "_best_oracle", -1.0):
+                args._best_oracle = oracle_f1
+                torch.save(ema_model.module.state_dict() if ema_model is not None
+                           else raw_model.state_dict(),
+                           os.path.join(run_dir, "best_model_oracle.pth"))
+                print(f"  ★ New best oracle model (footprint-conditioned Macro F1: "
+                      f"{oracle_f1:.4f}, epoch {epoch+1})")
 
         # Visualize validation samples with GT comparison (class-balanced)
         if rank == 0 and epoch % 5 == 0:  # Visualize every 5 epochs
@@ -854,7 +879,7 @@ def main():
                     break
 
             # Merge batches for visualization
-            if collected_batches:
+            if collected_batches and not args.flat_head:
                 merged_batch = {
                     "image": torch.cat([b["image"] for b in collected_batches], dim=0),
                     "inst_masks": sum([b["inst_masks"] for b in collected_batches], []),
@@ -864,7 +889,7 @@ def main():
                 visualize_with_gt(
                     merged_batch, vis_model, device, vis_dir,
                     num_samples=20,
-                    use_hierarchical=USE_HIERARCHICAL and not args.use_gated_head,
+                    use_hierarchical=args.use_hierarchical and not args.use_gated_head,
                     use_gated_head=args.use_gated_head,
                 )
 

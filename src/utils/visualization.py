@@ -6,12 +6,14 @@ import matplotlib.patches as mpatches
 from src.config import CATEGORIES, COLOR_TO_CAT, IGNORE_INDEX
 
 # Class color definitions (RGB) matching the dataset
+# Revision palette (R3.10): no green for damage; monotone severity ramp
+# white -> yellow -> orange -> purple -> red.
 CLASS_COLORS = {
     0: (255, 255, 255),   # Undamaged (White)
-    1: (0, 255, 83),      # Partial Roof (Green)
-    2: (246, 255, 11),    # Total Roof (Yellow)
-    3: (255, 138, 18),    # Partial Structural (Orange)
-    4: (255, 0, 0),       # Total Structural (Red)
+    1: (255, 221, 51),    # Partial Roof (Yellow)
+    2: (255, 140, 0),     # Total Roof (Orange)
+    3: (186, 85, 211),    # Partial Structural (Purple)
+    4: (215, 25, 28),     # Total Structural (Red)
 }
 
 # Inverse mapping for ground truth decoding
