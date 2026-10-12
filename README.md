@@ -134,6 +134,20 @@ hf download Ymx1025/DamageTriageFormer-model best.pth \
 The same script produces the crop baselines with `--arch resnet50`,
 `--arch vit_b_16`, or `--arch dinov3_vitl16` without `--gated`.
 
+### Predicting a new event
+
+`scripts/predict_event.py` applies the released crop-mode model to a new event. It takes georeferenced 8-bit RGB imagery at native resolution (one or more GeoTIFF/COG files or directories) and building footprints in any format GeoPandas reads (reprojected automatically), crops every footprint exactly as in training, and writes one prediction per footprint. Several checkpoints are averaged as a seed ensemble.
+
+```bash
+python scripts/predict_event.py \
+    --images /path/to/imagery_dir \
+    --footprints /path/to/footprints.gpkg \
+    --checkpoints $DINOV3_RUNS_ROOT/crop_dtf/best.pth \
+    --out-dir $DINOV3_RUNS_ROOT/<event>/predictions
+```
+
+The output directory contains `predictions.gpkg` and `predictions.csv` (the input footprints with `p0`–`p4`, `label`, `label_name`, `conf`, `p_damaged`, `n_models`, `src_image`, and `skip_reason` for footprints that could not be scored), `summary.json`, and `quicklook.png`. On DamageTriage-Bench test tiles converted to GeoTIFFs, the script reproduces the per-building probabilities of the evaluation pipeline to within 3e-4 (40 buildings, identical labels). Transfer to unseen events is much weaker than within-event accuracy (see the paper's leave-one-event-out results), so treat the outputs as screening evidence for human review.
+
 ### Multi-seed controls of the revised paper
 
 `scripts/train_crop_r2.py` trains every crop configuration in Table 6 of the
@@ -190,6 +204,7 @@ scripts/train_2gpu.sbatch
 scripts/build_instance_index.py
 scripts/train_crop.py
 scripts/train_crop_r2.py   # multi-seed head, resolution, and recipe controls
+scripts/predict_event.py   # inference on a new event (imagery + footprints)
 results/provenance.csv     # run-level provenance of every reported number
 results/provenance_r2.csv
 photo_splits.json
